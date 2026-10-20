@@ -19,10 +19,8 @@ jobs:
 
       - name: Create RDP User with Secure Password
         run: |
-          Add-Type -AssemblyName System.Security;
-          $chars = [char[]](65..90) + [char[]](97..122) + [char[]](48..57);
-          $randPart = -join ($chars | Get-Random -Count 10);
-          $password = "Rdp!" + $randPart + "9#aA";
+          $randPart = [guid]::NewGuid().ToString("N").Substring(0, 10);
+          $password = "Win#9" + $randPart + "!xZ";
           $securePass = ConvertTo-SecureString ($password) -AsPlainText -Force;
           New-LocalUser -Name "RDP" -Password ($securePass) -AccountNeverExpires;
           Add-LocalGroupMember -Group "Administrators" -Member "RDP";
@@ -47,3 +45,25 @@ jobs:
             $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4;
             Start-Sleep -Seconds 5;
             $retries++;
+          }
+          if (-not $tsIP) { Write-Error "Tailscale IP not assigned. Exiting."; exit 1; }
+          Add-Content -Path ($env:GITHUB_ENV) -Value "TAILSCALE_IP=$tsIP";
+
+      - name: Verify RDP Accessibility
+        run: |
+          Write-Host "Tailscale IP: $env:TAILSCALE_IP";
+          $testResult = Test-NetConnection -ComputerName ($env:TAILSCALE_IP) -Port 3389;
+          if (-not $testResult.TcpTestSucceeded) { Write-Error "TCP connection to RDP port 3389 failed"; exit 1; }
+          Write-Host "TCP connectivity successful!";
+
+      - name: Maintain Connection
+        run: |
+          Write-Host "=== RDP ACCESS ===";
+          Write-Host "Address: $env:TAILSCALE_IP";
+          Write-Host "Username: RDP";
+          Write-Host "Password: $env:RDP_CREDS";
+          Write-Host "==================";
+          while ($true) {
+            Write-Host "[$(Get-Date)] RDP Active - Cancel workflow to terminate";
+            Start-Sleep -Seconds 300;
+          }
